@@ -1,4 +1,4 @@
-const CACHE = 'duofit-static-v2';
+const CACHE = 'duofit-static-v4';
 const FILES = ['./', './index.html', './style.css', './app.js', './pages.css', './pages.js', './manifest.webmanifest', './icon.svg'];
 self.addEventListener('install', (event) => { event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', (event) => { event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))); self.clients.claim(); });
