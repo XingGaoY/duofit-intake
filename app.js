@@ -33,8 +33,8 @@
     $('food-form').reset(); $('food').focus(); renderItems();
   });
   async function sendRecord(record) {
-    const { apiUrl, token } = config();
-    if (!apiUrl) return false;
+    const { apiUrl, token, approved } = config();
+    if (!apiUrl || !token || !approved) return false;
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
     const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/submissions`, { method: 'POST', headers, body: JSON.stringify({ id: record.id, person: 'partner', date: record.date, meal: record.meal, items: record.items, submitted_at: record.created_at }) });
@@ -64,9 +64,32 @@
     $('history-list').querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', () => { if (confirm('删除这个尚未上传的本地草稿？')) { persist(getRecords().filter((r) => r.id !== b.dataset.delete)); renderHistory(); } }));
   }
   $('refresh').addEventListener('click', renderHistory);
-  const initial = config(); $('api-url').value = initial.apiUrl || 'https://br-divine-king-bdg94005-duofitintake.compute.c-8.us-east-2.aws.neon.tech'; $('api-token').value = initial.token || '';
-  function updateConnection() { const connected = !!(config().apiUrl && config().token); $('connection').textContent = connected ? 'API 已配置' : '本地草稿'; $('connection').classList.toggle('live', connected); }
-  $('save-settings').addEventListener('click', () => { const apiUrl = $('api-url').value.trim(); if (apiUrl && !/^https:\/\//.test(apiUrl)) { alert('API 地址必须以 https:// 开头'); return; } localStorage.setItem(CONFIG, JSON.stringify({ apiUrl, token: $('api-token').value.trim() })); updateConnection(); alert('连接设置已保存；填写地址不代表 API 已通过验证。'); });
+  const initial = config(); $('api-url').value = initial.apiUrl || 'https://br-divine-king-bdg94005-duofitintake.compute.c-8.us-east-2.aws.neon.tech'; $('device-label').value = initial.deviceLabel || '坏女人的手机';
+  const saveConfig = (value) => localStorage.setItem(CONFIG, JSON.stringify(value));
+  function updateConnection() { const connected = !!config().approved; $('connection').textContent = connected ? '设备已授权' : '本地草稿'; $('connection').classList.toggle('live', connected); $('pair-status').textContent = connected ? '设备已获得授权，可以上传待处理记录。' : config().requestId ? '已申请授权，等待 XingGao 确认。' : '尚未申请授权。'; }
+  $('pair-device').addEventListener('click', async () => {
+    const apiUrl = $('api-url').value.trim(); const deviceLabel = $('device-label').value.trim();
+    if (!/^https:\/\//.test(apiUrl) || deviceLabel.length < 2 || deviceLabel.length > 40) { $('pair-status').textContent = '请填写有效的 HTTPS 地址和设备名称。'; return; }
+    if (config().approved) { $('pair-status').textContent = '此设备已经授权，无需重新申请。'; return; }
+    $('pair-device').disabled = true; $('pair-status').textContent = '正在提交申请…';
+    try {
+      const bytes = new Uint8Array(32); crypto.getRandomValues(bytes);
+      const token = config().requestId ? config().token : [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+      const device_hash = [...new Uint8Array(hashBuffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
+      const response = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/device/register`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({device_hash,label:deviceLabel}) });
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      const data=await response.json(); saveConfig({apiUrl,token,deviceLabel,requestId:data.request_id,approved:false});
+      $('pair-status').textContent = '申请已提交。请让 XingGao 在 ChatGPT 中批准这台设备。'; updateConnection();
+    }catch(error){$('pair-status').textContent = `申请失败：${error.message}`;}
+    finally{$('pair-device').disabled=false;}
+  });
+  $('check-device').addEventListener('click', async () => {
+    const c=config();if(!c.requestId||!c.token){$('pair-status').textContent='请先申请设备授权。';return;}
+    $('pair-status').textContent='正在检查授权状态…';
+    try{const response=await fetch(`${c.apiUrl.replace(/\/+$/,'')}/api/device/status?id=${encodeURIComponent(c.requestId)}`,{headers:{Authorization:`Bearer ${c.token}`}});if(!response.ok)throw new Error(`HTTP ${response.status}`);const data=await response.json();saveConfig({...c,approved:data.status==='approved'});updateConnection();if(data.status==='revoked')$('pair-status').textContent='设备授权已撤销。';}
+    catch(error){$('pair-status').textContent=`检查失败：${error.message}`;}
+  });
   updateConnection(); renderItems(); renderHistory();
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 })();
