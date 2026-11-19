@@ -1,0 +1,7 @@
+node_modules/
+function/node_modules/
+function/dist/
+function/bundle.zip
+.env
+.env.*
+!.env.example
