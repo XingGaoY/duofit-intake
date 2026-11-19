@@ -7,6 +7,33 @@
   const config = () => { try { return JSON.parse(localStorage.getItem('duofit-v1-config') || '{}'); } catch { return {}; } };
   const readLocal = () => { try { return JSON.parse(localStorage.getItem('duofit-v1-body') || '[]'); } catch { return []; } };
   const saveLocal = (records) => localStorage.setItem('duofit-v1-body', JSON.stringify(records));
+  async function apiPost(path, body, multipart = false) {
+    const {apiUrl,token}=config();
+    if(!apiUrl||!token)throw new Error('尚未配置 API 地址和访问口令');
+    const headers={Authorization:`Bearer ${token}`};
+    if(!multipart)headers['Content-Type']='application/json';
+    const response=await fetch(`${apiUrl.replace(/\/+$/,'')}${path}`,{method:'POST',headers,body:multipart?body:JSON.stringify(body)});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+  async function getImages(id){const db=await openImagesDB();return new Promise((resolve,reject)=>{const tx=db.transaction('images','readonly');const req=tx.objectStore('images').get(id);req.onsuccess=()=>{db.close();resolve(req.result?.files||[]);};req.onerror=()=>{db.close();reject(req.error);};});}
+  async function syncBody(id){
+    const records=readLocal();const record=records.find((r)=>r.id===id);
+    if(!record||record.state==='sent')return;
+    if(!config().apiUrl||!config().token)return;
+    try{
+      if(record.type==='measurement')await apiPost('/api/measurements',{id:record.id,person:'partner',date:record.date,weight_kg:record.weight,waist_cm:record.waist,note:record.note});
+      else {
+        const files=await getImages(id),keys=[];
+        if(files.length===0)throw new Error('本机截图已丢失');
+        for(const file of files){const form=new FormData();form.append('file',file,file.name);form.append('date',record.date);const uploaded=await apiPost('/api/activity-images',form,true);keys.push(uploaded.key);}
+        await apiPost('/api/activities',{id:record.id,person:'partner',date:record.date,kind:record.kind,note:record.note,image_keys:keys});
+      }
+      record.state='sent';record.error='';
+      if(record.type==='activity')await deleteImages(id);
+    }catch(error){record.state='error';record.error=error.message;}
+    saveLocal(records);renderHistory();
+  }
   document.querySelectorAll('.page-tab').forEach((button) => button.addEventListener('click', () => {
     const page = button.dataset.page;
     document.querySelectorAll('.page-tab').forEach((tab) => { tab.classList.toggle('active', tab === button); if(tab === button)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current'); });
@@ -51,7 +78,7 @@
     event.preventDefault();const weight=$('morning-weight').value,waist=$('waist').value;
     if(!weight&&!waist){$('body-message').textContent='请至少填写晨重或腰围。';return;}
     const records=readLocal();records.unshift({id:crypto.randomUUID(),type:'measurement',date:$('measure-date').value,weight:weight||null,waist:waist||null,note:$('measure-note').value.trim(),state:'local',created_at:new Date().toISOString()});saveLocal(records);
-    $('morning-weight').value='';$('waist').value='';$('measure-note').value='';$('body-message').textContent='测量草稿已保存在本机，尚未写入 Neon。';renderHistory();
+    $('morning-weight').value='';$('waist').value='';$('measure-note').value='';$('body-message').textContent='测量草稿已保存在本机；如 API 已配置将尝试提交待处理区。';renderHistory();syncBody(records[0].id);
   });
   $('activity-images').addEventListener('change',()=>{const files=[...$('activity-images').files];$('upload-preview').innerHTML='';files.slice(0,5).forEach((file)=>{const image=document.createElement('img');image.alt=file.name;image.src=URL.createObjectURL(file);image.onload=()=>URL.revokeObjectURL(image.src);$('upload-preview').appendChild(image);});});
   $('activity-form').addEventListener('submit',async(event)=>{
@@ -59,10 +86,11 @@
     if(!files.length){$('body-message').textContent='请至少选择一张运动截图。';return;}
     if(files.length>5||files.some((f)=>f.size>8*1024*1024||!['image/jpeg','image/png','image/webp'].includes(f.type))){$('body-message').textContent='最多 5 张 JPG/PNG/WebP，每张不超过 8 MB。';return;}
     const id=crypto.randomUUID();
-    try{await saveImages(id,files);const records=readLocal();records.unshift({id,type:'activity',date:$('activity-date').value,kind:$('activity-kind').value,names:files.map((f)=>f.name),note:$('activity-note').value.trim(),state:'local',created_at:new Date().toISOString()});saveLocal(records);$('activity-form').reset();$('activity-date').value=day();$('upload-preview').innerHTML='';$('body-message').textContent='运动截图保存在本机，尚未上传云端。';renderHistory();}
+    try{await saveImages(id,files);const records=readLocal();records.unshift({id,type:'activity',date:$('activity-date').value,kind:$('activity-kind').value,names:files.map((f)=>f.name),note:$('activity-note').value.trim(),state:'local',created_at:new Date().toISOString()});saveLocal(records);$('activity-form').reset();$('activity-date').value=day();$('upload-preview').innerHTML='';$('body-message').textContent='运动截图保存在本机；如 API 已配置将尝试上传。';renderHistory();syncBody(id);}
     catch(e){$('body-message').textContent=`保存失败：${e.message}`;}
   });
-  function renderHistory(){const records=readLocal();$('body-history').innerHTML=records.length?records.map((r)=>`<div class="local-record"><strong>${ESC(r.date)} · ${r.type==='measurement'?'身体测量':'运动截图'}</strong><small>${r.type==='measurement'?`${r.weight?'晨重 '+ESC(r.weight)+'kg　':''}${r.waist?'腰围 '+ESC(r.waist)+'cm':''}`:`${ESC(r.names.length)} 张截图 · ${ESC(r.kind)}`}${r.note?' · '+ESC(r.note):''}</small><small>仅本机 · 未提交云端</small><button type="button" data-remove="${r.id}">删除本地草稿</button></div>`).join(''):'<div class="empty">暂无记录</div>';
+  function renderHistory(){const records=readLocal();$('body-history').innerHTML=records.length?records.map((r)=>`<div class="local-record"><strong>${ESC(r.date)} · ${r.type==='measurement'?'身体测量':'运动截图'}</strong><small>${r.type==='measurement'?`${r.weight?'晨重 '+ESC(r.weight)+'kg　':''}${r.waist?'腰围 '+ESC(r.waist)+'cm':''}`:`${ESC(r.names.length)} 张截图 · ${ESC(r.kind)}`}${r.note?' · '+ESC(r.note):''}</small><small>${r.state==='sent'?'已提交待处理区':r.state==='error'?'上传失败：'+ESC(r.error):'仅本机 · 未提交云端'}</small>${r.state==='sent'?'':`<button type="button" data-retry="${r.id}">重试上传</button>　<button type="button" data-remove="${r.id}">删除本地草稿</button>`}</div>`).join(''):'<div class="empty">暂无记录</div>';
+    $('body-history').querySelectorAll('[data-retry]').forEach((b)=>b.addEventListener('click',()=>syncBody(b.dataset.retry)));
     $('body-history').querySelectorAll('[data-remove]').forEach((b)=>b.addEventListener('click',async()=>{if(!confirm('删除这条尚未上传的本地记录？'))return;const r=readLocal().find((x)=>x.id===b.dataset.remove);if(r?.type==='activity')await deleteImages(r.id);saveLocal(readLocal().filter((x)=>x.id!==b.dataset.remove));renderHistory();}));}
   $('refresh-body').addEventListener('click',renderHistory);
 })();
