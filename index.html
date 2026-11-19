@@ -7,11 +7,14 @@
   <meta name="description" content="DuoFit 饮食记录：称重、备注、保存待处理餐次。" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./pages.css" />
   <title>DuoFit · 饮食记录</title>
 </head>
 <body>
   <main class="shell">
     <header class="top"><div><span class="eyebrow">DUOFIT · DAILY LOG</span><h1>记一餐，很简单。</h1><p>记录真实吃过的食物，后续再核算营养。</p></div><div class="mark">食</div></header>
+    <nav class="page-tabs" aria-label="功能分页"><button class="page-tab active" type="button" data-page="intake" aria-current="page">饮食记录</button><button class="page-tab" type="button" data-page="nutrition">营养计划</button><button class="page-tab" type="button" data-page="body">身体与运动</button></nav>
+    <div id="page-intake" class="page-view">
     <section class="panel">
       <div class="section-heading"><h2>添加食品</h2><span class="pill" id="connection">本地草稿</span></div>
       <label for="date">日期</label><input id="date" type="date" required />
@@ -26,9 +29,19 @@
     </section>
     <section class="panel meal-panel"><div class="section-heading"><h2>本餐清单</h2><span class="count" id="count">0 项</span></div><div id="items" class="items"><div class="empty">还没有添加食物</div></div><button id="submit" type="button" class="submit" disabled>保存本餐草稿</button><p class="hint" id="status" role="status" aria-live="polite">API 尚未连接，保存后仅保留在当前设备。</p></section>
     <section class="panel history"><div class="section-heading"><h2>已保存的草稿</h2><button id="refresh" type="button" class="text-button">刷新</button></div><div id="history-list" class="history-list"></div></section>
+    </div>
+    <div id="page-nutrition" class="page-view" hidden>
+      <section class="panel"><div class="section-heading"><h2>她的营养计划</h2><span class="pill" id="nutrition-state">待连接</span></div><p class="section-intro">以下目标应来自 Neon 中对应日期生效的营养计划。只有已核实摄入才计入当前进度。</p><label for="nutrition-date">查看日期</label><input id="nutrition-date" type="date" /><label for="nutrition-day">运动日类型</label><select id="nutrition-day"><option value="actual">当天实际运动（自动匹配）</option></select><div id="plan-summary" class="plan-summary">尚未获得营养计划数据</div><div class="nutrients" id="nutrient-list"></div><button type="button" id="reload-nutrition" class="secondary">刷新营养计划与进度</button><p id="nutrition-message" class="hint">API 尚未提供营养数据；不会采用记忆中的目标数值。</p></section>
+    </div>
+    <div id="page-body" class="page-view" hidden>
+      <section class="panel"><div class="section-heading"><h2>晨重与腰围</h2><span class="pill">本地待提交</span></div><p class="section-intro">实际测量后再填写。未填写的项目保持空白，不以零代替。</p><form id="body-form"><label for="measure-date">测量日期</label><input id="measure-date" type="date" required /><div class="two"><div><label for="morning-weight">晨重（kg）</label><input id="morning-weight" type="number" min="20" max="400" step="0.01" inputmode="decimal" placeholder="选填" /></div><div><label for="waist">腰围（cm）</label><input id="waist" type="number" min="20" max="250" step="0.1" inputmode="decimal" placeholder="选填" /></div></div><label for="measure-note">测量备注</label><textarea id="measure-note" rows="2" maxlength="500" placeholder="如：起床排尿后、腹胀等"></textarea><button class="primary" type="submit">保存测量草稿</button></form></section>
+      <section class="panel"><div class="section-heading"><h2>运动截图</h2><span class="pill">本机保存</span></div><form id="activity-form"><label for="activity-date">运动日期</label><input id="activity-date" type="date" required /><label for="activity-kind">运动类型</label><select id="activity-kind"><option value="strength">力量训练</option><option value="dance">舞蹈 / 芭蕾</option><option value="running">跑步</option><option value="cycling">骑行</option><option value="other">其他运动</option></select><label for="activity-images">选择截图 <span class="optional">最多 5 张，每张不超过 8 MB</span></label><input id="activity-images" type="file" accept="image/jpeg,image/png,image/webp" multiple /><div id="upload-preview" class="upload-preview"></div><label for="activity-note">运动备注</label><textarea id="activity-note" rows="2" maxlength="500" placeholder="例如：动作、组数、主观疲劳"></textarea><button class="primary" type="submit">保存运动草稿</button></form></section>
+      <section class="panel"><div class="section-heading"><h2>本机待提交记录</h2><button type="button" id="refresh-body" class="text-button">刷新</button></div><div id="body-history"></div><p class="hint" id="body-message" role="status">截图暂存于此设备的浏览器数据中，尚未上传云端。</p></section>
+    </div>
     <details class="settings"><summary>API 连接设置</summary><p>Neon Function 部署后在这里填入 HTTPS 地址。连接之前，数据只保存在此浏览器中。</p><label for="api-url">API 地址</label><input id="api-url" type="url" placeholder="https://…neon.tech" /><label for="api-token">访问口令（若 API 要求）</label><input id="api-token" type="password" autocomplete="off" placeholder="留空表示无需口令" /><button type="button" id="save-settings" class="secondary">保存连接设置</button></details>
     <footer>仅用于原始饮食记录 · 不自动计算营养、不写入正式餐次</footer>
   </main>
   <script defer src="./app.js"></script>
+  <script defer src="./pages.js"></script>
 </body>
 </html>
