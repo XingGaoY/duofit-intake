@@ -64,8 +64,8 @@
     $('history-list').querySelectorAll('[data-delete]').forEach((b) => b.addEventListener('click', () => { if (confirm('删除这个尚未上传的本地草稿？')) { persist(getRecords().filter((r) => r.id !== b.dataset.delete)); renderHistory(); } }));
   }
   $('refresh').addEventListener('click', renderHistory);
-  const initial = config(); $('api-url').value = initial.apiUrl || ''; $('api-token').value = initial.token || '';
-  function updateConnection() { const connected = !!config().apiUrl; $('connection').textContent = connected ? 'API 已配置' : '本地草稿'; $('connection').classList.toggle('live', connected); }
+  const initial = config(); $('api-url').value = initial.apiUrl || 'https://br-divine-king-bdg94005-duofitintake.compute.c-8.us-east-2.aws.neon.tech'; $('api-token').value = initial.token || '';
+  function updateConnection() { const connected = !!(config().apiUrl && config().token); $('connection').textContent = connected ? 'API 已配置' : '本地草稿'; $('connection').classList.toggle('live', connected); }
   $('save-settings').addEventListener('click', () => { const apiUrl = $('api-url').value.trim(); if (apiUrl && !/^https:\/\//.test(apiUrl)) { alert('API 地址必须以 https:// 开头'); return; } localStorage.setItem(CONFIG, JSON.stringify({ apiUrl, token: $('api-token').value.trim() })); updateConnection(); alert('连接设置已保存；填写地址不代表 API 已通过验证。'); });
   updateConnection(); renderItems(); renderHistory();
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
