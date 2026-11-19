@@ -1,0 +1,13 @@
+{
+  "name": "DuoFit 饮食记录",
+  "short_name": "DuoFit",
+  "description": "记录食品、重量与烹饪备注",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f5f1",
+  "theme_color": "#315e4a",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
