@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#315e4a" />
+  <meta name="description" content="DuoFit 饮食记录：称重、备注、保存待处理餐次。" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./style.css" />
+  <title>DuoFit · 饮食记录</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="top"><div><span class="eyebrow">DUOFIT · DAILY LOG</span><h1>记一餐，很简单。</h1><p>记录真实吃过的食物，后续再核算营养。</p></div><div class="mark">食</div></header>
+    <section class="panel">
+      <div class="section-heading"><h2>添加食品</h2><span class="pill" id="connection">本地草稿</span></div>
+      <label for="date">日期</label><input id="date" type="date" required />
+      <label>餐次</label><div class="segments" id="meals"><button type="button" data-value="breakfast">早餐</button><button type="button" data-value="lunch">午餐</button><button type="button" data-value="dinner">晚餐</button><button type="button" data-value="snack">加餐</button></div>
+      <form id="food-form">
+        <label for="food">食品项目</label><input id="food" placeholder="例如：鸡小胸、米饭、炒青菜" maxlength="100" required autocomplete="off" />
+        <div class="two"><div><label for="weight">重量（g）</label><input id="weight" type="number" min="0.1" max="100000" step="any" inputmode="decimal" placeholder="150" required /></div><div><label for="weight-kind">称重方式</label><select id="weight-kind"><option value="raw">生重</option><option value="cooked">熟重</option><option value="edible">可食部分</option><option value="unknown">不确定</option></select></div></div>
+        <label>烹饪情况 <span class="optional">可多选</span></label><div class="checks"><label class="check"><input id="oily" type="checkbox" /> <span>偏油</span></label><label class="check"><input id="rinsed" type="checkbox" /> <span>涮过水</span></label></div>
+        <label for="note">其他备注 <span class="optional">选填</span></label><textarea id="note" rows="2" maxlength="500" placeholder="例如：外卖、带骨、去皮、油比较多……"></textarea>
+        <button class="primary" type="submit">添加到本餐</button>
+      </form>
+    </section>
+    <section class="panel meal-panel"><div class="section-heading"><h2>本餐清单</h2><span class="count" id="count">0 项</span></div><div id="items" class="items"><div class="empty">还没有添加食物</div></div><button id="submit" type="button" class="submit" disabled>保存本餐草稿</button><p class="hint" id="status" role="status" aria-live="polite">API 尚未连接，保存后仅保留在当前设备。</p></section>
+    <section class="panel history"><div class="section-heading"><h2>已保存的草稿</h2><button id="refresh" type="button" class="text-button">刷新</button></div><div id="history-list" class="history-list"></div></section>
+    <details class="settings"><summary>API 连接设置</summary><p>Neon Function 部署后在这里填入 HTTPS 地址。连接之前，数据只保存在此浏览器中。</p><label for="api-url">API 地址</label><input id="api-url" type="url" placeholder="https://…neon.tech" /><label for="api-token">访问口令（若 API 要求）</label><input id="api-token" type="password" autocomplete="off" placeholder="留空表示无需口令" /><button type="button" id="save-settings" class="secondary">保存连接设置</button></details>
+    <footer>仅用于原始饮食记录 · 不自动计算营养、不写入正式餐次</footer>
+  </main>
+  <script defer src="./app.js"></script>
+</body>
+</html>
