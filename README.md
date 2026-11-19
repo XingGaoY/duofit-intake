@@ -11,7 +11,7 @@
 - 不保存正式 Neon `meals` / `intake_items`，不做营养计算。
 - 新增“营养计划”分页：预留 `GET /api/nutrition/overview?date=...&day_class=...`，计划版本、运动日分类、能量及四项营养素目标都必须由 API 返回；未连接前不展示猜测数值。
 - 新增“身体与运动”分页：晨重、腰围先作为本机草稿保存在 localStorage；截图先保存在 IndexedDB，API 认证配置完成后可同步到私有对象存储及待处理表。**这些信息不会直接写入正式运动或测量表**。清除未同步的浏览器数据可能导致丢失。
-- 后端 Neon Function 已部署在 `https://br-divine-king-bdg94005-duofitintake.compute.c-8.us-east-2.aws.neon.tech`。首次启用前须由所有者在 Function 环境设置强随机 `DUOFIT_SUBMIT_TOKEN`，并在 PWA 设置中输入；未配置时 API 返回 503，禁止未授权写入。
+- 后端 Neon Function 已部署在 `https://br-divine-king-bdg94005-duofitintake.compute.c-8.us-east-2.aws.neon.tech`。首次使用通过 PWA 的“申请设备授权”登记本机生成的凭据，管理员在 Neon 数据库核实设备后才批准，不需要共享 API Key。
 - 后端仅使用 `duofit_intake_api` 受限角色写入 `intake_stage`，对正式 `meals` 等表只有读取权限。所有正式入库仍需要用户明确确认。
 
 ## 提交协议（待实现的 Neon Function）
@@ -27,7 +27,7 @@
 }
 ```
 
-服务端必须验证调用者身份、约束 person/字段值、以 `id` 幂等写入待处理表，并提供适合 GitHub Pages 来源的 CORS 配置。口令目前只作为联调可选项；正式发布给他人使用前应接入可靠认证，不应在公开代码中硬编码任何凭据。
+服务端必须验证调用者身份、约束 person/字段值、以 `id` 幂等写入待处理表，并提供适合 GitHub Pages 来源的 CORS 配置。
 
 ## GitHub Pages
 
@@ -39,11 +39,13 @@
 
 后端源文件位于 `function/`。部署版本使用 `esbuild` 打包成 Node.js 24 的 `index.mjs`，并上传到 Neon Function slug `duofitintake`。
 
-`DUOFIT_DB_PASSWORD` 是仅用于 `intake_stage` 的数据库角色口令，已作为服务端环境变量保存，**不能加入前端、GitHub 仓库或日志**。`DUOFIT_SUBMIT_TOKEN` 须由所有者设置为强随机口令；它也是后端验证 PWA 提交的凭据。截图保存于私有 `duofit-activity-images` bucket。
+`DUOFIT_DB_PASSWORD` 是仅用于 `intake_stage` 的数据库角色口令，已作为服务端环境变量保存，**不能加入前端、GitHub 仓库或日志**。每个设备拥有独立的随机凭据，服务端只保存 SHA-256 哈希。`intake_stage.device_requests` 保存待批准设备，只有数据库管理端有权限向 `public.duofit_approved_devices` 添加批准记录。截图保存于私有 `duofit-activity-images` bucket。
 
 路由：
 
 - `GET /health`：公开健康检查（不暴露个人数据）
+- `POST /api/device/register`：提交设备绑定申请，未获得业务权限
+- `GET /api/device/status?id=...`：以该设备凭据查询批准状态
 - `POST /api/submissions`：饮食原始投稿
 - `POST /api/measurements`：身体测量原始投稿
 - `POST /api/activity-images`：上传单张截图（multipart）
