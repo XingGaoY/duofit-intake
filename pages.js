@@ -20,7 +20,7 @@
   async function syncBody(id){
     const records=readLocal();const record=records.find((r)=>r.id===id);
     if(!record||record.state==='sent')return;
-    if(!config().apiUrl||!config().token)return;
+    if(!config().apiUrl||!config().token||!config().approved)return;
     try{
       if(record.type==='measurement')await apiPost('/api/measurements',{id:record.id,person:'partner',date:record.date,weight_kg:record.weight,waist_cm:record.waist,note:record.note});
       else {
