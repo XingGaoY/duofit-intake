@@ -9,6 +9,8 @@
 - 在“API 连接设置”填入 Neon Function 的 HTTPS 根地址后，应用向 `POST {API_URL}/api/submissions` 提交 JSON。
 - API 尚未部署；仅填写 URL 不意味着已经连通。
 - 不保存正式 Neon `meals` / `intake_items`，不做营养计算。
+- 新增“营养计划”分页：预留 `GET /api/nutrition/overview?date=...&day_class=...`，计划版本、运动日分类、能量及四项营养素目标都必须由 API 返回；未连接前不展示猜测数值。
+- 新增“身体与运动”分页：晨重、腰围作为本机草稿保存在 localStorage；截图保存在当前浏览器的 IndexedDB 中。**它们尚未上传 API，更没有写入生产 Neon**。清除浏览器数据可能导致丢失。
 
 ## 提交协议（待实现的 Neon Function）
 
