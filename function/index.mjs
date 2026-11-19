@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { timingSafeEqual, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const ORIGIN = 'https://xinggaoy.github.io';
@@ -8,7 +8,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), { status
 const validUUID = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const validDate = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T12:00:00Z`));
 const validText = (value, max) => typeof value === 'string' && value.trim().length <= max;
-const tokensEqual = (actual, expected) => { if (!actual || !expected) return false; const a = Buffer.from(actual), b = Buffer.from(expected); return a.length === b.length && timingSafeEqual(a, b); };
+const hashToken = (token) => createHash('sha256').update(token).digest('hex');
 
 let pool;
 function db() {
@@ -23,13 +23,32 @@ function db() {
   return pool;
 }
 
-function checkAuth(request) {
-  const configured = process.env.DUOFIT_SUBMIT_TOKEN;
-  if (!configured) return false;
-  const supplied = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
-  return tokensEqual(supplied, configured);
+async function checkAuth(request) {
+  const supplied = request.headers.get('authorization')?.match(/^Bearer\s+([a-f0-9]{64})$/i)?.[1];
+  if (!supplied) return false;
+  const result = await db().query('SELECT 1 FROM public.duofit_approved_devices WHERE device_hash=$1 AND revoked_at IS NULL LIMIT 1',[hashToken(supplied)]);
+  return result.rowCount === 1;
 }
 const bodyOf = async (req, limit = 16000) => { const contentLength = Number(req.headers.get('content-length') || 0); if (contentLength > limit) throw new Error('Payload too large'); const body = await req.text(); if (Buffer.byteLength(body) > limit) throw new Error('Payload too large'); return JSON.parse(body); };
+
+async function registerDevice(request) {
+  const value = await bodyOf(request,2000);
+  if (!/^[a-f0-9]{64}$/.test(value.device_hash||'') || !validText(value.label,40) || value.label.trim().length<2) return json({error:'Invalid device request'},400);
+  const count = await db().query("SELECT count(*)::int AS total FROM intake_stage.device_requests WHERE requested_at > now() - interval '24 hours'");
+  if(count.rows[0].total>=50)return json({error:'Too many device requests'},429);
+  const id=randomUUID();
+  await db().query('INSERT INTO intake_stage.device_requests (id,device_hash,device_label) VALUES ($1,$2,$3) ON CONFLICT (device_hash) DO NOTHING',[id,value.device_hash,value.label.trim()]);
+  const stored=await db().query('SELECT id FROM intake_stage.device_requests WHERE device_hash=$1',[value.device_hash]);
+  return json({request_id:stored.rows[0].id,status:'pending'},202);
+}
+async function deviceStatus(request) {
+  const supplied=request.headers.get('authorization')?.match(/^Bearer\s+([a-f0-9]{64})$/i)?.[1];
+  const id=new URL(request.url).searchParams.get('id');
+  if(!supplied||!validUUID(id))return json({error:'Invalid request'},400);
+  const result=await db().query('SELECT a.approved_at,a.revoked_at FROM intake_stage.device_requests r LEFT JOIN public.duofit_approved_devices a ON a.request_id=r.id AND a.device_hash=r.device_hash WHERE r.id=$1 AND r.device_hash=$2',[id,hashToken(supplied)]);
+  if(!result.rowCount)return json({error:'Device request not found'},404);
+  return json({status:result.rows[0].revoked_at?'revoked':result.rows[0].approved_at?'approved':'pending'});
+}
 
 async function submitIntake(req) {
   const value = await bodyOf(req);
@@ -110,10 +129,11 @@ export default {async fetch(request){
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
   const path=new URL(request.url).pathname;
   if(path==='/health'&&request.method==='GET')return json({ok:true,service:'duofit-intake',authenticated:false});
-  if(!process.env.DUOFIT_SUBMIT_TOKEN)return json({error:'API authentication not configured'},503);
-  if(!checkAuth(request))return json({error:'Unauthorized'},401);
   try{
     if(request.method==='POST'&&request.headers.get('origin')!==ORIGIN)return json({error:'Origin not permitted'},403);
+    if(request.method==='POST'&&path==='/api/device/register')return await registerDevice(request);
+    if(request.method==='GET'&&path==='/api/device/status')return await deviceStatus(request);
+    if(!await checkAuth(request))return json({error:'Unauthorized or device not approved'},401);
     if(request.method==='POST'&&path==='/api/submissions')return await submitIntake(request);
     if(request.method==='POST'&&path==='/api/measurements')return await submitMeasurement(request);
     if(request.method==='POST'&&path==='/api/activities')return await submitActivity(request);
